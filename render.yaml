@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: abyss-library
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_KEY
+        generateValue: true
+      - key: PUBLIC_URL
+        value: https://abyss-library.onrender.com
