@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0a0a0a;
+  --panel: #111111;
+  --panel-2: #181818;
+  --border: #222222;
+  --border-2: #2a2a2a;
+  --text: #f0f0f0;
+  --muted: #666666;
+  --muted-2: #444444;
+  --accent: #e8b74a;
+  --accent-dim: rgba(232, 183, 74, 0.15);
+  --accent-border: rgba(232, 183, 74, 0.35);
+  --green: #4ade80;
+  --green-dim: rgba(74, 222, 128, 0.12);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #333; }
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Animated gradient border on cards */
+.addon-card {
+  position: relative;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.addon-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+/* Syntax highlight for JSON preview */
+.json-key   { color: #e8b74a; }
+.json-str   { color: #86efac; }
+.json-num   { color: #93c5fd; }
+.json-bool  { color: #f9a8d4; }
+.json-null  { color: #94a3b8; }
