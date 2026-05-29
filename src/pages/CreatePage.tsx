@@ -111,7 +111,7 @@ function ItemEditor({
     onChange({ ...item, seasons })
   }
 
-  const updateEpisode = (si: number, ei: number, updates: Partial<typeof item.seasons![0]['episodes'][0]>) => {
+  const updateEpisode = (si: number, ei: number, updates: Partial<SeriesEpisode>) => {
     const seasons = [...(item.seasons ?? [])]
     const eps = [...seasons[si].episodes]
     eps[ei] = { ...eps[ei], ...updates }

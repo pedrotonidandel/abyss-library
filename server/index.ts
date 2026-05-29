@@ -173,7 +173,15 @@ app.delete('/api/addons/:id', (req, res) => {
 // Health
 app.get('/api/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }))
 
+// In production, serve the built React app for all non-API routes
+if (process.env.NODE_ENV === 'production') {
+  const distDir = path.join(process.cwd(), 'dist')
+  app.use(express.static(distDir))
+  app.get('*', (_req, res) => res.sendFile(path.join(distDir, 'index.html')))
+}
+
 app.listen(PORT, () => {
-  console.log(`Abyss Library API running on http://localhost:${PORT}`)
-  console.log(`API_KEY: ${API_KEY}`)
+  console.log(`Abyss Library running on http://localhost:${PORT}`)
+  console.log(`NODE_ENV: ${process.env.NODE_ENV ?? 'development'}`)
+  console.log(`API_KEY set: ${!!API_KEY}`)
 })

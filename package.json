@@ -5,9 +5,9 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite",
-    "dev:server": "tsx watch server/index.ts",
-    "build": "vite build && tsc -p tsconfig.server.json",
-    "start": "node dist-server/index.js"
+    "dev:server": "tsx --env-file=.env watch server/index.ts",
+    "build": "vite build",
+    "start": "NODE_ENV=production tsx --env-file=.env server/index.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",
