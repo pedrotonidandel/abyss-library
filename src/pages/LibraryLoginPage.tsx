@@ -31,18 +31,8 @@ export function LibraryLoginPage() {
       <div style={{ position: 'fixed', bottom: '-5%', right: '-5%', width: 400, height: 400, borderRadius: '50%', pointerEvents: 'none', background: 'radial-gradient(circle, oklch(0.85 0.17 90 / 0.06) 0%, transparent 70%)' }} />
 
       <div style={{ width: '100%', maxWidth: 380, position: 'relative', zIndex: 1 }}>
-        {/* Logo + wordmark */}
+        {/* Wordmark */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div
-            style={{
-              width: 56, height: 56, borderRadius: 16, margin: '0 auto 16px',
-              background: 'var(--accent)', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontSize: 28, fontWeight: 800, color: '#0a0a0a',
-              fontFamily: "'Poppins', sans-serif",
-            }}
-          >
-            A
-          </div>
           <h1 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 32, color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>
             abyss library
           </h1>
