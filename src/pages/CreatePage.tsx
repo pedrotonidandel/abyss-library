@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import type { ContentCategory, DownloadItem, SeriesSeason } from '../types'
+import type { ContentCategory, DownloadItem, SeriesSeason, SeriesEpisode } from '../types'
+import { useAuth } from '../context/AuthContext'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const CATEGORY_LABEL: Record<ContentCategory, string> = {
-  movies: 'Filmes', series: 'Séries', animes: 'Animes',
+  movies: 'Filmes', series: 'Series', animes: 'Animes',
   games: 'Jogos', books: 'Livros', mixed: 'Misto',
 }
 const CATEGORY_EMOJI: Record<ContentCategory, string> = {
@@ -137,7 +138,7 @@ function ItemEditor({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {field('title', 'Título *', 'Ex: Inception')}
+        {field('title', 'Titulo *', 'Ex: Inception')}
         {field('fileSize', 'Tamanho', 'Ex: 4.2 GB')}
         {field('uploadDate', 'Data (YYYY-MM-DD)', '2024-01-01')}
         {field('coverUrl', 'Cover URL', 'https://...')}
@@ -211,7 +212,7 @@ function ItemEditor({
                     <input
                       className="px-2 py-1.5 rounded-md text-xs outline-none"
                       style={{ background: 'var(--panel-2)', border: '1px solid var(--border-2)', color: 'var(--text)', width: 90 }}
-                      placeholder="Título ep"
+                      placeholder="Titulo ep"
                       value={ep.title}
                       onChange={e => updateEpisode(si, ei, { title: e.target.value })}
                     />
@@ -253,6 +254,9 @@ interface CreatePageProps {
 type Mode = 'bulk' | 'manual'
 
 export function CreatePage({ onDone, editId }: CreatePageProps) {
+  const { user, token } = useAuth()
+  const isAdmin = user?.isAdmin ?? false
+
   const [mode, setMode] = useState<Mode>('manual')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -262,7 +266,7 @@ export function CreatePage({ onDone, editId }: CreatePageProps) {
   const [bulkText, setBulkText] = useState('')
   const [bulkError, setBulkError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [apiKey, setApiKey] = useState(() => sessionStorage.getItem('abyss-lib-key') ?? '')
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   // Load existing addon for editing
@@ -285,8 +289,6 @@ export function CreatePage({ onDone, editId }: CreatePageProps) {
         }
       })
   }, [editId])
-
-  const saveKey = (k: string) => { setApiKey(k); sessionStorage.setItem('abyss-lib-key', k) }
 
   // Parse bulk JSON (array of DownloadItem OR { name, downloads } envelope)
   const parseBulk = (text: string) => {
@@ -327,25 +329,44 @@ export function CreatePage({ onDone, editId }: CreatePageProps) {
     downloads: items,
   }), [name, items])
 
-  const canSave = name.trim() && items.length > 0 && apiKey.trim()
+  const canSave = name.trim() && items.length > 0
 
   const handleSave = async () => {
     if (!canSave) return
     setSaving(true)
+    setSuccessMsg(null)
     try {
       const body = { name: name.trim(), description, author, category, downloads: items }
-      const url = editId ? `/api/addons/${editId}` : '/api/addons'
-      const method = editId ? 'PUT' : 'POST'
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error ?? 'Erro ao salvar')
+
+      if (isAdmin) {
+        // Admin: publish directly
+        const url = editId ? `/api/addons/${editId}` : '/api/addons'
+        const method = editId ? 'PUT' : 'POST'
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) {
+          const err = await res.json() as { error?: string }
+          throw new Error(err.error ?? 'Erro ao salvar')
+        }
+        onDone()
+      } else {
+        // Regular user: submit to pending queue
+        const res = await fetch('/api/addons/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) {
+          const err = await res.json() as { error?: string }
+          throw new Error(err.error ?? 'Erro ao enviar')
+        }
+        setSuccessMsg('Addon enviado para revisao! Um admin ira aprovar em breve.')
+        // Reset form
+        setName(''); setDescription(''); setAuthor(''); setItems([])
       }
-      onDone()
     } catch (e) {
       alert((e as Error).message)
     } finally {
@@ -363,64 +384,64 @@ export function CreatePage({ onDone, editId }: CreatePageProps) {
           ← Voltar
         </button>
         <h1 className="text-xl font-bold" style={{ color: 'var(--text)' }}>
-          {editId ? 'Editar Addon' : 'Publicar Addon'}
+          {editId ? 'Editar Addon' : isAdmin ? 'Publicar Addon' : 'Enviar Addon para Revisao'}
         </h1>
+        {!isAdmin && (
+          <span className="text-xs px-2 py-1 rounded-lg" style={{ background: 'rgba(234,179,8,0.1)', color: '#eab308', border: '1px solid rgba(234,179,8,0.25)' }}>
+            Sera revisado por um admin antes de aparecer na biblioteca
+          </span>
+        )}
       </div>
+
+      {successMsg && (
+        <div style={{ marginBottom: 24, padding: '14px 18px', borderRadius: 12, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}>
+          <p style={{ margin: 0, fontSize: 14, color: '#22c55e' }}>✓ {successMsg}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* LEFT — Form */}
         <div className="flex flex-col gap-5">
 
-          {/* API Key */}
-          <div className="rounded-xl p-4" style={{ background: 'var(--panel)', border: '1px solid var(--border)' }}>
-            <label className="text-xs font-medium block mb-2" style={{ color: 'var(--muted)' }}>API Key *</label>
-            <input
-              type="password"
-              placeholder="Sua API key..."
-              value={apiKey}
-              onChange={e => saveKey(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg text-sm mono outline-none"
-              style={{ background: 'var(--panel-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }}
-            />
-          </div>
-
           {/* Metadata */}
           <div className="rounded-xl p-4 flex flex-col gap-3" style={{ background: 'var(--panel)', border: '1px solid var(--border)' }}>
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Informações do Addon</h2>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Informacoes do Addon</h2>
 
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium" style={{ color: 'var(--muted)' }}>Nome *</label>
               <input
                 className="px-3 py-2 rounded-lg text-sm outline-none"
                 style={{ background: 'var(--panel-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }}
-                placeholder="Ex: Filmes Clássicos HD"
+                placeholder="Ex: Filmes Classicos HD"
                 value={name}
                 onChange={e => setName(e.target.value)}
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium" style={{ color: 'var(--muted)' }}>Descrição</label>
+              <label className="text-xs font-medium" style={{ color: 'var(--muted)' }}>Descricao</label>
               <textarea
                 className="px-3 py-2 rounded-lg text-sm outline-none resize-none"
                 style={{ background: 'var(--panel-2)', border: '1px solid var(--border-2)', color: 'var(--text)', minHeight: 64 }}
-                placeholder="Descreva o conteúdo deste addon..."
+                placeholder="Descreva o conteudo deste addon..."
                 value={description}
                 onChange={e => setDescription(e.target.value)}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium" style={{ color: 'var(--muted)' }}>Autor</label>
-                <input
-                  className="px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: 'var(--panel-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }}
-                  placeholder="Seu nome"
-                  value={author}
-                  onChange={e => setAuthor(e.target.value)}
-                />
-              </div>
+              {isAdmin && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium" style={{ color: 'var(--muted)' }}>Autor</label>
+                  <input
+                    className="px-3 py-2 rounded-lg text-sm outline-none"
+                    style={{ background: 'var(--panel-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }}
+                    placeholder="Seu nome"
+                    value={author}
+                    onChange={e => setAuthor(e.target.value)}
+                  />
+                </div>
+              )}
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium" style={{ color: 'var(--muted)' }}>Categoria</label>
                 <select
@@ -514,7 +535,7 @@ export function CreatePage({ onDone, editId }: CreatePageProps) {
             </div>
           )}
 
-          {/* Save */}
+          {/* Save / Submit */}
           <button
             onClick={handleSave}
             disabled={!canSave || saving}
@@ -526,9 +547,13 @@ export function CreatePage({ onDone, editId }: CreatePageProps) {
               cursor: canSave ? 'pointer' : 'not-allowed',
             }}
           >
-            {saving ? 'Salvando...' : editId ? `Atualizar Addon (${items.length} itens)` : `Publicar Addon (${items.length} itens)`}
+            {saving
+              ? (isAdmin ? 'Salvando...' : 'Enviando...')
+              : isAdmin
+                ? (editId ? `Atualizar Addon (${items.length} itens)` : `Publicar Addon (${items.length} itens)`)
+                : `Enviar para Revisao (${items.length} itens)`
+            }
           </button>
-          {!apiKey && <p className="text-xs text-center" style={{ color: '#ef4444' }}>Informe a API key para publicar</p>}
         </div>
 
         {/* RIGHT — Live preview */}
@@ -559,7 +584,7 @@ export function CreatePage({ onDone, editId }: CreatePageProps) {
               <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text)' }}>{name || '(nome do addon)'}</p>
               {description && <p className="text-xs mb-2" style={{ color: 'var(--muted)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{description}</p>}
               <p className="text-xs mb-3" style={{ color: 'var(--muted-2)' }}>
-                por <span style={{ color: 'var(--muted)' }}>{author || 'Anônimo'}</span>
+                por <span style={{ color: 'var(--muted)' }}>{author || user?.username || 'Anonimo'}</span>
                 {' · '}{items.length} item{items.length !== 1 ? 's' : ''}
               </p>
               <div className="py-2 rounded-lg text-center text-xs font-semibold"

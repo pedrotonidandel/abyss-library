@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import type { AddonMeta, ContentCategory } from '../types'
+import { useAuth } from '../context/AuthContext'
 
 const CATEGORY_LABEL: Record<string, string> = {
-  movies: 'Filmes', series: 'Séries', animes: 'Animes',
+  movies: 'Filmes', series: 'Series', animes: 'Animes',
   games: 'Jogos', books: 'Livros', mixed: 'Misto',
 }
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -25,9 +26,9 @@ function copyToClipboard(text: string) {
 }
 
 function AddonCard({ addon, onEdit }: { addon: AddonMeta; onEdit: (id: string) => void }) {
+  const { user, token } = useAuth()
   const [copied, setCopied] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const apiKey = sessionStorage.getItem('abyss-lib-key') ?? ''
 
   const handleCopy = () => {
     copyToClipboard(addon.url)
@@ -36,12 +37,11 @@ function AddonCard({ addon, onEdit }: { addon: AddonMeta; onEdit: (id: string) =
   }
 
   const handleDelete = async () => {
-    if (!apiKey) { alert('Informe a API key nas configurações'); return }
     if (!confirm(`Deletar "${addon.name}"?`)) return
     setDeleting(true)
     await fetch(`/api/addons/${addon.id}`, {
       method: 'DELETE',
-      headers: { 'x-api-key': apiKey },
+      headers: { Authorization: `Bearer ${token}` },
     })
     window.location.reload()
   }
@@ -108,26 +108,30 @@ function AddonCard({ addon, onEdit }: { addon: AddonMeta; onEdit: (id: string) =
         >
           {copied ? '✓ Copiado!' : 'Copiar URL'}
         </button>
-        <button
-          onClick={() => onEdit(addon.id)}
-          className="px-3 py-2 rounded-xl text-xs font-medium transition-colors"
-          style={{ background: 'var(--panel-2)', color: 'var(--muted)', border: '1px solid var(--border)' }}
-          onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--text)')}
-          onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--muted)')}
-        >
-          Editar
-        </button>
-        <button
-          onClick={handleDelete}
-          disabled={deleting}
-          className="px-3 py-2 rounded-xl text-xs font-medium transition-colors"
-          style={{ background: 'var(--panel-2)', color: 'var(--muted-2)', border: '1px solid var(--border)' }}
-          onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.color = '#ef4444')}
-          onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--muted-2)')}
-          title="Deletar addon"
-        >
-          🗑
-        </button>
+        {user?.isAdmin && (
+          <>
+            <button
+              onClick={() => onEdit(addon.id)}
+              className="px-3 py-2 rounded-xl text-xs font-medium transition-colors"
+              style={{ background: 'var(--panel-2)', color: 'var(--muted)', border: '1px solid var(--border)' }}
+              onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--text)')}
+              onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--muted)')}
+            >
+              Editar
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="px-3 py-2 rounded-xl text-xs font-medium transition-colors"
+              style={{ background: 'var(--panel-2)', color: 'var(--muted-2)', border: '1px solid var(--border)' }}
+              onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.color = '#ef4444')}
+              onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--muted-2)')}
+              title="Deletar addon"
+            >
+              🗑
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
@@ -139,23 +143,18 @@ interface HomePageProps {
 }
 
 export function HomePage({ onCreate, onEdit }: HomePageProps) {
+  const { user } = useAuth()
   const [addons, setAddons] = useState<AddonMeta[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<ContentCategory | 'all'>('all')
-  const [apiKey, setApiKey] = useState(() => sessionStorage.getItem('abyss-lib-key') ?? '')
 
   useEffect(() => {
     fetch('/api/addons')
       .then(r => r.json())
-      .then(data => { setAddons(data); setLoading(false) })
+      .then(data => { setAddons(Array.isArray(data) ? data : []); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
-
-  const saveKey = (k: string) => {
-    setApiKey(k)
-    sessionStorage.setItem('abyss-lib-key', k)
-  }
 
   const categories = useMemo<ContentCategory[]>(() => {
     const cats = [...new Set(addons.map(a => a.category))] as ContentCategory[]
@@ -190,7 +189,7 @@ export function HomePage({ onCreate, onEdit }: HomePageProps) {
             className="px-5 py-2.5 rounded-xl text-sm font-semibold"
             style={{ background: 'var(--accent)', color: '#0a0a0a' }}
           >
-            + Publicar Addon
+            {user?.isAdmin ? '+ Publicar Addon' : '+ Enviar Addon'}
           </button>
           <a
             href="/api/addons"
@@ -202,19 +201,6 @@ export function HomePage({ onCreate, onEdit }: HomePageProps) {
             /api/addons
           </a>
         </div>
-      </div>
-
-      {/* API Key (admin) */}
-      <div className="mb-8 p-4 rounded-xl" style={{ background: 'var(--panel)', border: '1px solid var(--border)' }}>
-        <p className="text-xs mb-2 font-medium" style={{ color: 'var(--muted)' }}>API Key (necessária para publicar/editar/deletar)</p>
-        <input
-          type="password"
-          placeholder="Cole sua API key aqui..."
-          value={apiKey}
-          onChange={e => saveKey(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg text-sm mono outline-none"
-          style={{ background: 'var(--panel-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }}
-        />
       </div>
 
       {/* Filters */}
@@ -267,7 +253,7 @@ export function HomePage({ onCreate, onEdit }: HomePageProps) {
           </p>
           {addons.length === 0 && (
             <button onClick={onCreate} className="mt-2 text-sm font-semibold" style={{ color: 'var(--accent)' }}>
-              Publicar o primeiro →
+              {user?.isAdmin ? 'Publicar o primeiro →' : 'Enviar o primeiro →'}
             </button>
           )}
         </div>
