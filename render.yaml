@@ -11,3 +11,5 @@ services:
         generateValue: true
       - key: PUBLIC_URL
         value: https://abyss-library.onrender.com
+      - key: MONGODB_URI
+        sync: false
