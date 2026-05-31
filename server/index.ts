@@ -5,6 +5,8 @@ import { dirname, join } from 'path'
 const __dirname_env = dirname(fileURLToPath(import.meta.url))
 config({ path: join(__dirname_env, '..', '.env') })
 
+import { buildMagnetzSource } from './magnetz.js'
+
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
@@ -293,6 +295,105 @@ app.delete('/api/addons/:id', async (req, res) => {
 
 // Health
 app.get('/api/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }))
+
+// ── Magnetz Builder (SSE) ─────────────────────────────────────────────────────
+// POST /api/admin/magnetz/build
+// Body: { categories, pages, minScore, magnetzDelay, tmdbKey?, rawgKey? }
+// Response: text/event-stream — emite BuildEvent JSON lines
+// After 'done' event, the client can POST /api/admin/magnetz/publish to save
+// the sources directly to MongoDB.
+
+app.post('/api/admin/magnetz/build', async (req, res) => {
+  if (!await requireAdmin(req, res)) return
+
+  const {
+    categories  = ['movies', 'series'],
+    pages       = 2,
+    minScore    = 0,
+    magnetzDelay = 8000,
+    tmdbKey:    bodyTmdbKey,
+    rawgKey:    bodyRawgKey,
+  } = req.body ?? {}
+
+  const tmdbKey = bodyTmdbKey || process.env.TMDB_API_KEY
+  const rawgKey = bodyRawgKey || process.env.RAWG_API_KEY
+
+  if (!tmdbKey && (categories as string[]).some((c: string) => c !== 'games')) {
+    res.status(400).json({ error: 'tmdbKey obrigatório para movies/series/animes' })
+    return
+  }
+
+  // ── SSE headers ──────────────────────────────────────────────────────────
+  res.setHeader('Content-Type',  'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection',    'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')  // disable nginx buffering
+  res.flushHeaders()
+
+  const send = (data: object) => {
+    if (!res.writableEnded) {
+      res.write(`data: ${JSON.stringify(data)}\n\n`)
+    }
+  }
+
+  // Abort when client disconnects
+  const abortController = new AbortController()
+  req.on('close', () => abortController.abort())
+
+  try {
+    await buildMagnetzSource(
+      {
+        categories: Array.isArray(categories) ? categories : [categories],
+        pages:        Math.max(1, Math.min(10, Number(pages))),
+        minScore:     Number(minScore),
+        magnetzDelay: Math.max(3000, Number(magnetzDelay)),
+        tmdbKey:      tmdbKey ?? '',
+        rawgKey:      rawgKey ?? '',
+      },
+      send,
+      abortController.signal,
+    )
+  } catch (err) {
+    send({ type: 'error', message: (err as Error).message })
+  }
+
+  if (!res.writableEnded) res.end()
+})
+
+// POST /api/admin/magnetz/publish
+// Body: { sources: Source[] }  — saves each source's downloads to addons collection
+app.post('/api/admin/magnetz/publish', async (req, res) => {
+  if (!await requireAdmin(req, res)) return
+  if (!requireDb(res)) return
+
+  const { sources } = req.body ?? {}
+  if (!Array.isArray(sources) || sources.length === 0)
+    return res.status(400).json({ error: 'sources[] is required' })
+
+  const now = new Date().toISOString()
+  const inserted: string[] = []
+
+  for (const src of sources) {
+    if (!Array.isArray(src.downloads) || src.downloads.length === 0) continue
+
+    const doc: AddonDoc = {
+      _id:         uuidv4(),
+      name:        src.name  ?? `Magnetz · ${src.category}`,
+      description: `Gerado automaticamente via Magnetz Builder em ${now}`,
+      author:      'Magnetz Builder',
+      category:    src.category ?? 'mixed',
+      downloads:   src.downloads,
+      itemCount:   src.downloads.length,
+      createdAt:   now,
+      updatedAt:   now,
+    }
+
+    await db!.collection<AddonDoc>('addons').insertOne(doc)
+    inserted.push(doc._id)
+  }
+
+  res.json({ ok: true, inserted: inserted.length, ids: inserted })
+})
 
 // Serve built React app in production
 if (process.env.NODE_ENV === 'production') {

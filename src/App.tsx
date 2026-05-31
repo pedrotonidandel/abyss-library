@@ -4,23 +4,24 @@ import { HomePage } from './pages/HomePage'
 import { CreatePage } from './pages/CreatePage'
 import { LibraryLoginPage } from './pages/LibraryLoginPage'
 import { AdminQueuePage } from './pages/AdminQueuePage'
+import { MagnetzBuilderPage } from './pages/MagnetzBuilderPage'
 
-export type Page = 'home' | 'create' | 'queue' | 'login'
+export type Page = 'home' | 'create' | 'queue' | 'login' | 'magnetz'
 
 function AppContent() {
   const { user, loading, logout } = useAuth()
   const [page, setPage] = useState<Page>('home')
   const [editId, setEditId] = useState<string | null>(null)
 
-  const goCreate = () => {
-    // Redirect to login if not authenticated yet
+  const goCreate  = () => {
     if (!user) { setPage('login'); return }
     setEditId(null); setPage('create')
   }
-  const goEdit   = (id: string) => { setEditId(id); setPage('create') }
-  const goHome   = () => { setEditId(null); setPage('home') }
-  const goQueue  = () => setPage('queue')
-  const goLogin  = () => setPage('login')
+  const goEdit    = (id: string) => { setEditId(id); setPage('create') }
+  const goHome    = () => { setEditId(null); setPage('home') }
+  const goQueue   = () => setPage('queue')
+  const goMagnetz = () => setPage('magnetz')
+  const goLogin   = () => setPage('login')
 
   // After login, go back to home (or create if that's where we were headed)
   const handleLoggedIn = () => setPage('home')
@@ -77,21 +78,36 @@ function AppContent() {
                 )}
               </div>
 
-              {/* Admin: queue link */}
+              {/* Admin: queue + magnetz builder */}
               {user.isAdmin && (
-                <button
-                  onClick={goQueue}
-                  className="text-xs px-3 py-1.5 rounded-lg transition-colors"
-                  style={{
-                    color: page === 'queue' ? 'var(--text)' : 'var(--muted)',
-                    border: `1px solid ${page === 'queue' ? 'var(--accent-border)' : 'var(--border)'}`,
-                    background: page === 'queue' ? 'var(--accent-dim)' : 'transparent',
-                  }}
-                  onMouseEnter={e => { if (page !== 'queue') (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)' }}
-                  onMouseLeave={e => { if (page !== 'queue') (e.currentTarget as HTMLButtonElement).style.color = 'var(--muted)' }}
-                >
-                  Fila
-                </button>
+                <>
+                  <button
+                    onClick={goQueue}
+                    className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                    style={{
+                      color: page === 'queue' ? 'var(--text)' : 'var(--muted)',
+                      border: `1px solid ${page === 'queue' ? 'var(--accent-border)' : 'var(--border)'}`,
+                      background: page === 'queue' ? 'var(--accent-dim)' : 'transparent',
+                    }}
+                    onMouseEnter={e => { if (page !== 'queue') (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)' }}
+                    onMouseLeave={e => { if (page !== 'queue') (e.currentTarget as HTMLButtonElement).style.color = 'var(--muted)' }}
+                  >
+                    Fila
+                  </button>
+                  <button
+                    onClick={goMagnetz}
+                    className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                    style={{
+                      color: page === 'magnetz' ? 'var(--text)' : 'var(--muted)',
+                      border: `1px solid ${page === 'magnetz' ? 'var(--accent-border)' : 'var(--border)'}`,
+                      background: page === 'magnetz' ? 'var(--accent-dim)' : 'transparent',
+                    }}
+                    onMouseEnter={e => { if (page !== 'magnetz') (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)' }}
+                    onMouseLeave={e => { if (page !== 'magnetz') (e.currentTarget as HTMLButtonElement).style.color = 'var(--muted)' }}
+                  >
+                    ⚙ Magnetz
+                  </button>
+                </>
               )}
 
               <button
@@ -130,9 +146,10 @@ function AppContent() {
       </nav>
 
       {/* ── Pages ── */}
-      {page === 'home'   && <HomePage onCreate={goCreate} onEdit={goEdit} onLogin={goLogin} />}
-      {page === 'create' && user && <CreatePage onDone={goHome} editId={editId} />}
-      {page === 'queue'  && user?.isAdmin && <AdminQueuePage onBack={goHome} />}
+      {page === 'home'    && <HomePage onCreate={goCreate} onEdit={goEdit} onLogin={goLogin} />}
+      {page === 'create'  && user && <CreatePage onDone={goHome} editId={editId} />}
+      {page === 'queue'   && user?.isAdmin && <AdminQueuePage onBack={goHome} />}
+      {page === 'magnetz' && user?.isAdmin && <MagnetzBuilderPage onBack={goHome} />}
     </div>
   )
 }
