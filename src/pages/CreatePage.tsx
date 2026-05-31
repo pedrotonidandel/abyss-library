@@ -290,21 +290,57 @@ export function CreatePage({ onDone, editId }: CreatePageProps) {
       })
   }, [editId])
 
-  // Parse bulk JSON (array of DownloadItem OR { name, downloads } envelope)
+  // Parse bulk JSON — accepts four shapes:
+  //   1. DownloadItem[]                      — plain array of items
+  //   2. { name, downloads[] }               — single-source envelope
+  //   3. Source[]  (has id/category/downloads) — array of Abyss Sources (script output)
+  //   4. { sources: Source[] }               — wrapped sources object
   const parseBulk = (text: string) => {
     setBulkError(null)
     try {
       const parsed = JSON.parse(text)
-      let arr: DownloadItem[]
-      if (Array.isArray(parsed)) {
-        arr = parsed
-      } else if (parsed.downloads && Array.isArray(parsed.downloads)) {
-        arr = parsed.downloads
+
+      // Shape 4: { sources: Source[] }
+      if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.sources)) {
+        return parseBulk(JSON.stringify(parsed.sources))
+      }
+
+      // Shape 2: { name, downloads[] }
+      if (!Array.isArray(parsed) && parsed?.downloads && Array.isArray(parsed.downloads)) {
         if (parsed.name && !name) setName(parsed.name)
-      } else {
+        setItems(parsed.downloads as DownloadItem[])
+        setBulkText(text)
+        return
+      }
+
+      if (!Array.isArray(parsed)) {
         throw new Error('Esperava um array ou { name, downloads[] }')
       }
-      setItems(arr)
+
+      // Shape 3: Source[] — array where each element has its own downloads[]
+      // Detected when the first element looks like a Source (has id + downloads)
+      const firstItem = parsed[0]
+      if (
+        firstItem &&
+        typeof firstItem === 'object' &&
+        Array.isArray((firstItem as Record<string, unknown>).downloads)
+      ) {
+        // Flatten all downloads from all sources
+        const sources = parsed as Array<{ name?: string; category?: string; downloads: DownloadItem[] }>
+        const allDownloads = sources.flatMap(s => s.downloads ?? [])
+        if (allDownloads.length === 0) throw new Error('Nenhum download encontrado nas sources.')
+
+        // Use first source name as addon name if not set
+        if (!name && sources[0]?.name) setName(sources[0].name)
+
+        setItems(allDownloads)
+        setBulkText(text)
+        setBulkError(null)
+        return
+      }
+
+      // Shape 1: plain DownloadItem[]
+      setItems(parsed as DownloadItem[])
       setBulkText(text)
     } catch (e) {
       setBulkError((e as Error).message)
@@ -495,7 +531,7 @@ export function CreatePage({ onDone, editId }: CreatePageProps) {
                   background: 'var(--panel-2)', border: `1px solid ${bulkError ? '#ef4444' : 'var(--border-2)'}`,
                   color: 'var(--text)', minHeight: 220, fontFamily: 'JetBrains Mono, monospace',
                 }}
-                placeholder={'Cole aqui um array de itens:\n[\n  {\n    "title": "Inception",\n    "uris": ["magnet:?xt=..."],\n    "uploadDate": "2024-01-01",\n    "fileSize": "4.2 GB"\n  }\n]\n\nOu um envelope { "name": "...", "downloads": [...] }'}
+                placeholder={'Formatos aceitos:\n\n① Array de itens: [{ "title": "...", "uris": [...] }]\n② Envelope:       { "name": "...", "downloads": [...] }\n③ Source único:   { "id": "...", "downloads": [...] }\n④ Array de Sources (saída do Magnetz Builder):\n   [{ "name": "Magnetz · Movies", "downloads": [...] }, ...]'}
                 value={bulkText}
                 onChange={e => parseBulk(e.target.value)}
               />
