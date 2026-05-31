@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 
-export function LibraryLoginPage() {
+interface LibraryLoginPageProps {
+  onBack?: () => void
+  onLoggedIn?: () => void
+}
+
+export function LibraryLoginPage({ onBack, onLoggedIn }: LibraryLoginPageProps) {
   const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -14,6 +19,7 @@ export function LibraryLoginPage() {
     setLoading(true)
     try {
       await login(email, password)
+      onLoggedIn?.()
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -31,13 +37,30 @@ export function LibraryLoginPage() {
       <div style={{ position: 'fixed', bottom: '-5%', right: '-5%', width: 400, height: 400, borderRadius: '50%', pointerEvents: 'none', background: 'radial-gradient(circle, oklch(0.85 0.17 90 / 0.06) 0%, transparent 70%)' }} />
 
       <div style={{ width: '100%', maxWidth: 380, position: 'relative', zIndex: 1 }}>
+
+        {/* Back button — only when accessed via nav */}
+        {onBack && (
+          <button
+            onClick={onBack}
+            style={{
+              position: 'absolute', top: -48, left: 0,
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--muted)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6,
+            }}
+            onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--text)')}
+            onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--muted)')}
+          >
+            ← Voltar
+          </button>
+        )}
+
         {/* Wordmark */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <h1 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 32, color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>
             abyss library
           </h1>
           <p style={{ color: 'var(--muted)', fontSize: 14, margin: '8px 0 0' }}>
-            Entre com sua conta Abyss para continuar
+            Entre com sua conta Abyss para acessar recursos de admin
           </p>
         </div>
 

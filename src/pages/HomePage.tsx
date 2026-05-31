@@ -140,9 +140,10 @@ function AddonCard({ addon, onEdit }: { addon: AddonMeta; onEdit: (id: string) =
 interface HomePageProps {
   onCreate: () => void
   onEdit: (id: string) => void
+  onLogin: () => void
 }
 
-export function HomePage({ onCreate, onEdit }: HomePageProps) {
+export function HomePage({ onCreate, onEdit, onLogin }: HomePageProps) {
   const { user } = useAuth()
   const [addons, setAddons] = useState<AddonMeta[]>([])
   const [loading, setLoading] = useState(true)
@@ -185,11 +186,11 @@ export function HomePage({ onCreate, onEdit }: HomePageProps) {
         </p>
         <div className="flex items-center justify-center gap-3 mt-6">
           <button
-            onClick={onCreate}
+            onClick={user ? onCreate : onLogin}
             className="px-5 py-2.5 rounded-xl text-sm font-semibold"
             style={{ background: 'var(--accent)', color: '#0a0a0a' }}
           >
-            {user?.isAdmin ? '+ Publicar Addon' : '+ Enviar Addon'}
+            {!user ? '+ Enviar Addon' : user.isAdmin ? '+ Publicar Addon' : '+ Enviar Addon'}
           </button>
           <a
             href="/api/addons"
@@ -252,8 +253,12 @@ export function HomePage({ onCreate, onEdit }: HomePageProps) {
             {addons.length === 0 ? 'Nenhum addon publicado ainda.' : 'Nenhum addon encontrado.'}
           </p>
           {addons.length === 0 && (
-            <button onClick={onCreate} className="mt-2 text-sm font-semibold" style={{ color: 'var(--accent)' }}>
-              {user?.isAdmin ? 'Publicar o primeiro →' : 'Enviar o primeiro →'}
+            <button
+              onClick={user ? onCreate : onLogin}
+              className="mt-2 text-sm font-semibold"
+              style={{ color: 'var(--accent)' }}
+            >
+              {!user ? 'Entrar para enviar →' : user.isAdmin ? 'Publicar o primeiro →' : 'Enviar o primeiro →'}
             </button>
           )}
         </div>
