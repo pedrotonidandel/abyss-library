@@ -186,7 +186,8 @@ async function fetchRawgGames(pages: number, key: string, limiter: RateLimiter):
 
 // ─── Magnetz ──────────────────────────────────────────────────────────────────
 
-interface MagnetzMagnet {
+export interface MagnetzMagnet {
+  name:        string
   magnet_link: string
   is_verified: boolean
   score:       number

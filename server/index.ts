@@ -5,7 +5,7 @@ import { dirname, join } from 'path'
 const __dirname_env = dirname(fileURLToPath(import.meta.url))
 config({ path: join(__dirname_env, '..', '.env') })
 
-import { buildMagnetzSource } from './magnetz.js'
+import { buildMagnetzSource, type MagnetzMagnet } from './magnetz.js'
 
 // ── Slug helpers ───────────────────────────────────────────────────────────────
 
@@ -334,6 +334,35 @@ app.delete('/api/addons/:id', async (req, res) => {
 
 // Health
 app.get('/api/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }))
+
+// ── Magnetz Search (proxy — evita CORS no browser) ────────────────────────────
+// GET /api/magnetz/search?q=...&minScore=...&page=...
+// Retorna resultados verificados da API do Magnetz. Requer usuário autenticado.
+
+app.get('/api/magnetz/search', async (req, res) => {
+  const user = await validateToken(req.headers.authorization)
+  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+
+  const q        = (req.query.q as string | undefined)?.trim()
+  const minScore = Math.max(0, Number(req.query.minScore ?? 0))
+  const page     = Math.max(1, Number(req.query.page ?? 1))
+
+  if (!q) return res.status(400).json({ error: 'q is required' })
+
+  try {
+    const r = await fetch(
+      `https://magnetz.eu/api/magnets/search?query=${encodeURIComponent(q)}&page=${page}`,
+      { headers: { Accept: 'application/json' } },
+    )
+    if (!r.ok) throw new Error(`Magnetz HTTP ${r.status}`)
+
+    const data = await r.json() as { data?: MagnetzMagnet[] }
+    const results = (data.data ?? []).filter(m => m.score >= minScore)
+    res.json({ results, page, query: q })
+  } catch (err) {
+    res.status(502).json({ error: (err as Error).message })
+  }
+})
 
 // ── Magnetz Builder (SSE) ─────────────────────────────────────────────────────
 // POST /api/admin/magnetz/build
