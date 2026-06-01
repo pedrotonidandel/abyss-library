@@ -7,6 +7,44 @@ config({ path: join(__dirname_env, '..', '.env') })
 
 import { buildMagnetzSource } from './magnetz.js'
 
+// ── Slug helpers ───────────────────────────────────────────────────────────────
+
+/**
+ * Converts a string to a URL-safe slug.
+ * "Magnetz · Movies" → "magnetz-movies"
+ * "Pedro's Top 10!" → "pedros-top-10"
+ */
+function slugify(text: string): string {
+  return text
+    .normalize('NFD')                      // decompose accented chars
+    .replace(/[̀-ͯ]/g, '')       // strip diacritics
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')          // non-alphanumeric → hyphen
+    .replace(/^-+|-+$/g, '')              // trim leading/trailing hyphens
+    .slice(0, 80)                          // max length
+}
+
+/**
+ * Generates a slug from author + name.
+ * If the slug is already taken, appends -2, -3, etc.
+ */
+async function generateSlug(author: string, name: string, db: import('mongodb').Db): Promise<string> {
+  const base = [author, name]
+    .filter(Boolean)
+    .map(slugify)
+    .filter(Boolean)
+    .join('-') || `addon-${Date.now()}`
+
+  // Check for collisions and find a free slot
+  let candidate = base
+  let n = 2
+  while (true) {
+    const existing = await db.collection('addons').findOne({ _id: candidate })
+    if (!existing) return candidate
+    candidate = `${base}-${n++}`
+  }
+}
+
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
@@ -168,12 +206,13 @@ app.post('/api/addons', async (req, res) => {
   if (!name || !Array.isArray(downloads) || downloads.length === 0)
     return res.status(400).json({ error: 'name and downloads[] are required' })
 
+  const resolvedAuthor = (author ?? 'anonimo') as string
   const now = new Date().toISOString()
   const doc: AddonDoc = {
-    _id: uuidv4(),
+    _id: await generateSlug(resolvedAuthor, name as string, db!),
     name, downloads,
     description: description ?? '',
-    author: author ?? 'Anônimo',
+    author: resolvedAuthor,
     category: category ?? 'mixed',
     itemCount: downloads.length,
     createdAt: now,
@@ -228,7 +267,7 @@ app.post('/api/addons/pending/:id/approve', async (req, res) => {
 
   const now = new Date().toISOString()
   const doc: AddonDoc = {
-    _id: uuidv4(),
+    _id: await generateSlug(pending.submittedBy, pending.name, db!),
     name: pending.name,
     description: pending.description,
     author: pending.submittedBy,
@@ -376,9 +415,10 @@ app.post('/api/admin/magnetz/publish', async (req, res) => {
   for (const src of sources) {
     if (!Array.isArray(src.downloads) || src.downloads.length === 0) continue
 
+    const addonName = src.name ?? `Magnetz · ${src.category}`
     const doc: AddonDoc = {
-      _id:         uuidv4(),
-      name:        src.name  ?? `Magnetz · ${src.category}`,
+      _id:         await generateSlug('magnetz', addonName, db!),
+      name:        addonName,
       description: `Gerado automaticamente via Magnetz Builder em ${now}`,
       author:      'Magnetz Builder',
       category:    src.category ?? 'mixed',
